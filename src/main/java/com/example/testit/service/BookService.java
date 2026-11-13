@@ -62,7 +62,7 @@ public class BookService {
             throw new IllegalStateException("Book can only be borrowed if status is DISPONIBLE");
         }
         // Vérifier si le membre a déjà un livre EMPRUNTE
-        List<Book> ongoingLoans = bookRepository.findByMemberAndStatus(memberId, Status.RENDU);
+        List<Book> ongoingLoans = bookRepository.findByMemberAndStatus(memberId, Status.EMPRUNTE);
         if (!ongoingLoans.isEmpty()) {
             throw new IllegalStateException("Member cannot borrow more than one book at a time");
         }
@@ -80,12 +80,15 @@ public class BookService {
             throw new IllegalStateException("Book can only be returned if status is EMPRUNTE");
         }
         Member member = book.getBorrower();
+        if (member == null || !member.getId().equals(memberId)) {
+            throw new IllegalStateException("Only the borrower can return the book");
+        }
         book.setStatus(Status.RENDU);
         Book saved = bookRepository.save(book);
         mailService.sendMail(member, "Livre rendu", "Merci d'avoir rendu '" + book.getTitle() + "'.");
         // Prévenir aussi le bibliothécaire référent si présent
         if (member.getReferent() != null) {
-            mailService.sendMail(member, "Livre rendu par un de vos membres",
+            mailService.sendMail(member.getReferent(), "Livre rendu par un de vos membres",
                     "'" + book.getTitle() + "' a été rendu par " + member.getUsername() + ".");
         }
         return saved;
