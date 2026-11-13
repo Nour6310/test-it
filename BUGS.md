@@ -1,5 +1,9 @@
 # Bugs trouvés par les tests
 
+**Étudiante** : BEN HASSINE Nour El Houda  
+**TD** : Test It - Prêt de livres (Spring Boot 4, Java 25)  
+**Date** : 13/11/2026
+
 ## Récapitulatif
 
 | # | Bug | Trouvé par | Type de test |
