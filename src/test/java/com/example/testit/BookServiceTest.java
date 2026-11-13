@@ -43,6 +43,8 @@ class BookServiceTest {
         Mockito.when(bookRepository.save(Mockito.any())).thenAnswer(i -> i.getArgument(0));
     }
 
+    // ---------- Exercice 1 ----------
+
     @Test
     void unMembreEmprunteUnLivreDisponible() {
         // When
@@ -58,6 +60,36 @@ class BookServiceTest {
                 .sendMail(Mockito.eq(nour), Mockito.contains("emprunt"), Mockito.anyString());
     }
 
+    // ---------- Bonus : cas d'erreur de l'emprunt ----------
+
+    @Test
+    void refuseLEmpruntDUnLivreInconnu() {
+        // When / Then : le livre 42 n'existe pas
+        Assertions.assertThatThrownBy(() -> bookService.borrowBook(42L, 2L))
+                .isInstanceOf(IllegalArgumentException.class);
+        Mockito.verify(bookRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void refuseLEmpruntParUnMembreInconnu() {
+        // When / Then : le membre 77 n'existe pas
+        Assertions.assertThatThrownBy(() -> bookService.borrowBook(5L, 77L))
+                .isInstanceOf(IllegalArgumentException.class);
+        Mockito.verify(bookRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void refuseLEmpruntSiLeLivreEstDejaEmprunte() {
+        // Given : le livre est deja emprunte
+        livre.setStatus(Status.EMPRUNTE);
+
+        // When / Then
+        Assertions.assertThatThrownBy(() -> bookService.borrowBook(5L, 2L))
+                .isInstanceOf(IllegalStateException.class);
+        Mockito.verify(bookRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verify(mailService, Mockito.never()).sendMail(Mockito.any(), Mockito.anyString(), Mockito.anyString());
+    }
+
     @Test
     void refuseLEmpruntSiLeMembreADejaUnLivreEnCours() {
         // Given : nour a deja un livre EMPRUNTE
@@ -67,9 +99,10 @@ class BookServiceTest {
         // When / Then
         Assertions.assertThatThrownBy(() -> bookService.borrowBook(5L, 2L))
                 .isInstanceOf(IllegalStateException.class);
-        // Verify que rien n'est sauvegarde
         Mockito.verify(bookRepository, Mockito.never()).save(Mockito.any());
     }
+
+    // ---------- Bonus : retour d'un livre ----------
 
     @Test
     void refuseLeRetourParUnAutreMembre() {
@@ -98,5 +131,38 @@ class BookServiceTest {
         // Then : un mail au membre ET un mail au referent
         Mockito.verify(mailService).sendMail(Mockito.eq(nour), Mockito.anyString(), Mockito.anyString());
         Mockito.verify(mailService).sendMail(Mockito.eq(biblio), Mockito.anyString(), Mockito.anyString());
+    }
+
+    @Test
+    void sansReferentSeulLeMembreRecoitUnMail() {
+        // Given : nour n'a pas de referent
+        livre.setStatus(Status.EMPRUNTE);
+        livre.setBorrower(nour);
+
+        // When
+        var result = bookService.returnBook(5L, 2L);
+
+        // Then : un seul mail, envoye a nour
+        Assertions.assertThat(result.getStatus()).isEqualTo(Status.RENDU);
+        Mockito.verify(mailService, Mockito.times(1)).sendMail(Mockito.any(), Mockito.anyString(), Mockito.anyString());
+        Mockito.verify(mailService).sendMail(Mockito.eq(nour), Mockito.anyString(), Mockito.anyString());
+    }
+
+    // ---------- Bonus : fake plutot que mock ----------
+
+    @Test
+    void lEmpruntEnvoieUnMailAuMembreAvecUnFake() {
+        // Given : on remplace le mock du mail par un fake
+        var fakeMail = new FakeMailService();
+        var service = new BookService(bookRepository, memberRepository, fakeMail);
+
+        // When
+        service.borrowBook(5L, 2L);
+
+        // Then : on lit directement les mails gardes par le fake
+        Assertions.assertThat(fakeMail.mails).hasSize(1);
+        Assertions.assertThat(fakeMail.mails.get(0).destinataire()).isEqualTo(nour);
+        Assertions.assertThat(fakeMail.mails.get(0).sujet()).contains("emprunt");
+        Assertions.assertThat(fakeMail.mails.get(0).message()).contains("Les Miserables");
     }
 }

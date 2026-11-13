@@ -1,4 +1,4 @@
-# Bugs trouvés par les tests
+# Tests, erreurs et corrections
 
 **Étudiante** : BEN HASSINE Nour El Houda  
 **TD** : Test It - Prêt de livres (Spring Boot 4, Java 25)  
@@ -19,6 +19,9 @@
 | 9 | Un membre peut emprunter plusieurs livres | `BookServiceTest` (bonus) | Unitaire |
 | 10 | N'importe qui peut rendre un livre | `BookServiceTest` (bonus) | Unitaire |
 | 11 | Le référent n'est jamais prévenu | `BookServiceTest` (bonus) | Unitaire |
+| 12 | PUT remet un livre emprunté à DISPONIBLE | `BookControllerIT` (bonus) | Intégration |
+| 13 | Emprunt sans être connecté : erreur 500 | `BookControllerIT` (bonus) | Intégration |
+| 14 | DELETE d'un livre absent répond 204 | `BookControllerIT` (bonus) | Intégration |
 
 ---
 
@@ -68,7 +71,7 @@
 ## Bug 7 - POST /books/{id}/borrow rend le livre au lieu de l'emprunter
 - **Type de test** : intégration (MockMvc + vraie base)
 - **Test** : `BookControllerIT.creerUnLivrePuisLEmprunter`
-- **Symptôme** : `Status expected:<200> but was:<400>`
+- **Symptôme** : `AssertionError` à la ligne 54 sur `status().isOk()` : l'emprunt est refusé (400, car le livre DISPONIBLE ne peut pas être « rendu »)
 - **Qui a tort ?** Le code : l'endpoint `/borrow` appelle `bookService.returnBook(...)` (copier-coller).
 - **Correction** : appel de `bookService.borrowBook(...)`.
 
@@ -100,13 +103,34 @@
 - **Qui a tort ?** Le code : le 2e mail est envoyé à `member` au lieu de `member.getReferent()`.
 - **Correction** : destinataire `member.getReferent()`.
 
+## Bug 12 - PUT sur un livre emprunté le remet à DISPONIBLE
+- **Type de test** : intégration (MockMvc + vraie base)
+- **Test** : `BookControllerIT.modifierUnLivreEmprunteNeChangePasSonStatut`
+- **Symptôme** : le titre est bien modifié, mais le statut repasse à `DISPONIBLE` et l'emprunteur est perdu.
+- **Qui a tort ?** Le code : `updateBook` enregistre tel quel le livre reçu en JSON, qui n'a ni statut ni emprunteur, donc il écrase tout.
+- **Correction** : `updateBook` relit le livre en base et ne modifie que `title` et `author`. L'emprunteur passe en `FetchType.EAGER`, sinon la réponse JSON du PUT plante comme au bug 8.
+
+## Bug 13 - Emprunter sans être connecté provoque une erreur 500
+- **Type de test** : intégration (MockMvc)
+- **Test** : `BookControllerIT.emprunterSansEtreConnecteRenvoie401`
+- **Symptôme** : `ServletException` causée par `IllegalStateException: Member not authenticated`
+- **Qui a tort ?** Le code : le `orElseThrow(...)` est placé avant le `try`, donc l'exception n'est jamais attrapée.
+- **Correction** : `/borrow` et `/return` répondent `401 Unauthorized` si personne n'est connecté.
+
+## Bug 14 - Supprimer un livre inexistant répond 204
+- **Type de test** : intégration (MockMvc)
+- **Test** : `BookControllerIT.supprimerUnLivreQuiNExistePasRenvoie404`
+- **Symptôme** : `AssertionError` à la ligne 95 sur `status().isNotFound()` : le controller répond « supprimé » (204) sans vérifier que le livre existe
+- **Qui a tort ?** Choix de conception : le README ne précise rien, mais `GET` et `PUT` répondent 404 pour un livre absent. Par cohérence, `DELETE` doit faire pareil.
+- **Correction** : `DELETE` vérifie que le livre existe, sinon il répond `404 Not Found`.
 ---
 
 ## Bilan
 
-- **7 tests** écrits (4 exercices + 3 bonus), tous verts.
-- **11 bugs** trouvés et corrigés, tous dans le code (aucun test faux).
+- **16 tests** écrits (4 exercices + 12 bonus), tous verts.
+- **14 bugs** trouvés et corrigés : 13 erreurs du code et 1 choix de conception (bug 14). Aucun test n'était faux.
 - **Tests unitaires** (4 bugs : 1, 9, 10, 11) : ils trouvent les erreurs de logique métier. Mais ils ne voient pas la base : le bug `OR`/`AND` leur échappe, car le repository est mocké.
-- **Tests d'intégration** (7 bugs : 2 à 8) : ils trouvent les erreurs d'assemblage (schéma Liquibase, requête SQL, transaction, controller, JSON).
+- **Tests d'intégration** (10 bugs : 2 à 8 et 12 à 14) : ils trouvent les erreurs d'assemblage (schéma Liquibase, requête SQL, transaction, controller, JSON).
+- Bonus **fake plutôt que mock** : `FakeMailService` garde les mails dans une liste. On vérifie le résultat (les mails envoyés) au lieu de vérifier des appels de méthode.
 - Chaque test a été vu **rouge avant d'être vert**, ce qui prouve qu'il teste vraiment quelque chose.
 - Remarque : la console H2 annoncée dans le README ne fonctionne pas en Spring Boot 4 sans la dépendance `spring-boot-h2console`.

@@ -43,10 +43,13 @@ public class BookService {
     }
 
     public Book updateBook(Book book) {
-        if (book.getId() == null || !bookRepository.existsById(book.getId())) {
+        Book existing = book.getId() == null ? null : bookRepository.findById(book.getId()).orElse(null);
+        if (existing == null) {
             throw new IllegalArgumentException("Book not found");
         }
-        return bookRepository.save(book);
+        existing.setTitle(book.getTitle());
+        existing.setAuthor(book.getAuthor());
+        return bookRepository.save(existing);
     }
 
     public void deleteBook(Long id) {
