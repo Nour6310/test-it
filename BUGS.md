@@ -18,3 +18,10 @@
 - **Symptome** : `Expected size: 1 but was: 3`
 - **Qui a tort ?** Le code : avec `OR`, la requete renvoie les livres du membre OU tous les livres au statut demande.
 - **Correction** : `OR` remplace par `AND` dans `BookRepository`.
+
+## Bug 5 - LazyInitializationException au retour d'un livre
+- **Test** : `BookServiceIT.emprunterPuisRendreUnLivre`
+- **Symptome** : `LazyInitializationException: could not initialize proxy - no Session`
+- **Qui a tort ?** Le code : `borrower` est en LAZY et `BookService` n'est pas transactionnel. Le membre est lu apres la fermeture de la session (envoi du mail).
+- **Correction** : ajout de `@Transactional` sur la classe `BookService`.
+- **Remarque** : si le test avait ete annote `@Transactional`, le bug aurait ete cache.
